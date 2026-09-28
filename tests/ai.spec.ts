@@ -214,6 +214,31 @@ test('未配置或缺少作文输入时给出提示且不发请求，窄屏保�
   await expect(page.locator('.ai-message')).toContainText('请先在作文中加入')
   expect(calls).toBe(0)
   await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('navigation', { name: '手机工作台' }).getByRole('button', { name: 'AI', exact: true }).click()
   await expect(page.getByRole('button', { name: '推荐模板主题', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('手机端 AI 推荐进入选句，应用正文后返回写作', async ({ page }) => {
+  await prepare(page)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const mobileNav = page.getByRole('navigation', { name: '手机工作台' })
+  await page.route(endpoint, async route => {
+    const input = context(route)
+    if (input.topics) await reply(route, { recommendations: [{ topicId: 'nervous', reason: '适合开头。' }] })
+    else await reply(route, { paragraph1: [...input.paragraph1, { type: 'text', content: 'My friend smiled.' }], paragraph2: [] })
+  })
+
+  await mobileNav.getByRole('button', { name: 'AI', exact: true }).click()
+  await page.getByRole('button', { name: '推荐模板主题' }).click()
+  await page.getByRole('button', { name: '查看该主题' }).click()
+  await expect(page.getByLabel('模板素材库')).toBeVisible()
+  await page.getByRole('button', { name: '＋ 加入作文' }).first().click()
+  await expect(page.getByRole('region', { name: '作文编辑' })).toBeVisible()
+
+  await mobileNav.getByRole('button', { name: 'AI', exact: true }).click()
+  await page.getByRole('button', { name: '串联作文' }).click()
+  await page.getByRole('button', { name: '确认应用到作文' }).click()
+  await expect(page.getByRole('region', { name: '作文编辑' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Paragraph 1', exact: true }).getByTestId('text-block').getByRole('textbox')).toHaveValue('My friend smiled.')
 })

@@ -24,6 +24,7 @@ export default function App() {
   const [selectedTopic, setTopicId] = useState(topics[0]?.id ?? '')
   const topicId = topics.some(t => t.id === selectedTopic && t.categoryId === categoryId) ? selectedTopic : topics.find(t => t.categoryId === categoryId)?.id ?? ''
   const [view, setView] = useState<'workbench' | 'library' | 'settings'>('workbench')
+  const [mobileView, setMobileView] = useState<'write' | 'library' | 'ai'>('write')
   const [query, setQuery] = useState('')
   const [favorites, setFavorites] = useState(false)
   const [target, setTarget] = useState<Paragraph>('paragraph1')
@@ -70,6 +71,13 @@ export default function App() {
     const block: EssayBlock = { id: crypto.randomUUID(), type: 'template', sentenceId: sentence.id, content: sentence.english, sourceLabel: sentenceSource(sentence, data) }
     setEssay(current => ({ ...current, [target]: [...current[target], block] }))
     setNotice(`已添加到 Paragraph ${target === 'paragraph1' ? '1' : '2'}`)
+    showMobileView('write', `block-${block.id}`)
+  }
+
+  function showMobileView(next: 'write' | 'library' | 'ai', scrollTo?: string) {
+    if (!window.matchMedia('(max-width: 720px)').matches) return
+    setMobileView(next)
+    requestAnimationFrame(() => (document.getElementById(scrollTo ?? 'mobile-workspace-start'))?.scrollIntoView({ block: 'start' }))
   }
 
   function insertText(paragraph: Paragraph, index: number) {
@@ -122,7 +130,11 @@ export default function App() {
       <div className="workspace-heading"><div><span className="eyebrow">{view === 'workbench' ? 'THE ART OF CONTINUATION' : view === 'library' ? 'A PERSONAL COMMONPLACE BOOK' : 'MAKE YOURSELF AT HOME'}</span><h2 lang="en">{view === 'workbench' ? <>Every sentence, <em>a beginning.</em></> : view === 'library' ? <>Words worth <em>keeping.</em></> : <>A space of <em>your own.</em></>}</h2></div><div className="heading-note"><svg className="book-ornament" viewBox="0 0 150 95" fill="none" aria-hidden="true"><g stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 40Q44 31 72 47Q98 31 130 40L136 78Q103 70 73 84Q44 70 10 78Z"/><path d="M72 47L73 84M15 40L20 72Q45 65 73 80Q103 65 131 73L130 40M26 48Q43 44 59 51M25 55Q43 51 61 58M24 62Q43 59 62 65M86 52Q105 43 121 47M85 59Q105 50 123 54"/><path d="M77 65Q92 36 100 9M91 34Q73 27 79 16Q92 19 91 34ZM97 23Q112 23 114 12Q102 10 97 23ZM86 47Q70 43 72 32Q85 32 86 47ZM91 37Q108 40 112 29Q100 26 91 37Z"/></g><path d="M72 84V90M58 90H88" stroke="#ad9270" strokeWidth="1.2" strokeLinecap="round"/></svg><span>{view === 'workbench' ? '作文工作台' : view === 'library' ? '素材库管理' : '设置'}</span><p>{view === 'workbench' ? '拾取词句，铺陈情节，让故事继续。' : view === 'library' ? '收藏读过的好句，也留下自己的表达。' : '安顿好工具，把心思留给写作。'}</p></div></div>
       {view === 'library' && <LibraryManager library={data} onChange={library => setData(current => ({ ...current, ...library }))} />}
       {view === 'settings' && <DataSettings data={data} apiKey={apiKey} onSaveApi={saveApi} onReplace={replaceData} />}
-      {view === 'workbench' && <main className="workspace">
+      {view === 'workbench' && <>
+      <nav className="mobile-workspace-nav" aria-label="手机工作台">
+        {([['write', '写作'], ['library', '选句'], ['ai', 'AI']] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={mobileView === key} onClick={() => showMobileView(key)}>{label}</button>)}
+      </nav>
+      <main className="workspace" id="mobile-workspace-start" data-mobile-view={mobileView}>
         <aside className="library panel" aria-label="模板素材库">
           <div className="panel-kicker" lang="en">I. THE SENTENCE COLLECTION</div>
           <div className="panel-heading"><h2>模板素材库</h2><span>{sentences.length} 条素材</span></div>
@@ -173,7 +185,7 @@ export default function App() {
                 {essay[paragraph].length === 0 && <div className="empty-state"><p>故事从一句话开始</p><span>从左侧加入模板句，或在下方添加自己的连接文字。</span></div>}
                 <button className="insert-text" onClick={() => insertText(paragraph, 0)}>＋ 添加连接文字</button>
                 {essay[paragraph].map((block, index) => <Fragment key={block.id}>
-                  <div className={`essay-block ${block.type}`} data-testid={`${block.type}-block`}>
+                  <div className={`essay-block ${block.type}`} id={`block-${block.id}`} data-testid={`${block.type}-block`}>
                     <div className="block-top"><span className="block-label">{block.type === 'template' && <strong>模板句</strong>} {sourceLabel(block)}</span><span className="block-index">{String(index + 1).padStart(2, '0')}</span></div>
                     <textarea className="english" aria-label={`Paragraph ${paragraphIndex + 1} ${block.type === 'template' ? '模板句' : '连接文字'} ${index + 1}`} rows={3} value={block.content} placeholder="写下自己的连接文字…" onChange={event => editBlock(paragraph, block.id, event.target.value)} />
                     <div className="block-actions"><button disabled={index === 0} onClick={() => moveBlock(paragraph, index, -1)}>↑ 上移</button><button disabled={index === essay[paragraph].length - 1} onClick={() => moveBlock(paragraph, index, 1)}>↓ 下移</button><button onClick={() => transferBlock(paragraph, block.id)}>移至第 {paragraphIndex === 0 ? '2' : '1'} 段</button><button className="delete" onClick={() => setEssay(current => ({ ...current, [paragraph]: current[paragraph].filter(item => item.id !== block.id) }))}>删除</button></div>
@@ -187,9 +199,9 @@ export default function App() {
         </section>
 
         <AiPanel key={essay.id} essay={essay} library={data} settings={data.settings} apiKey={apiKey} onSettings={() => setView('settings')}
-          onTopic={id => { const topic = topics.find(t => t.id === id); if (topic) { setCategoryId(topic.categoryId); setTopicId(id); setQuery(''); setFavorites(false) } }}
-          onApply={(snapshot, draft) => setEssay(current => JSON.stringify(current) === snapshot ? { ...current, paragraph1: draft.paragraph1, paragraph2: draft.paragraph2 } : current)} />
-      </main>}
+          onTopic={id => { const topic = topics.find(t => t.id === id); if (topic) { setCategoryId(topic.categoryId); setTopicId(id); setQuery(''); setFavorites(false); showMobileView('library') } }}
+          onApply={(snapshot, draft) => { setEssay(current => JSON.stringify(current) === snapshot ? { ...current, paragraph1: draft.paragraph1, paragraph2: draft.paragraph2 } : current); showMobileView('write') }} />
+      </main></>}
       {reading && <EssayReader essay={reading} onClose={() => setReading(null)} />}
       <footer><span lang="en">The Writing Room.</span><p>One sentence at a time.<span aria-hidden="true"> / </span>让故事，慢慢成形。</p><span className="footer-flourish" aria-hidden="true">❧</span></footer>
     </div>
